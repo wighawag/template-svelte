@@ -1,41 +1,21 @@
 <script lang="ts">
-	import { fly } from 'svelte/transition';
-	import { serviceWorker } from '$lib/config';
-
-	// TODO
-	export let src: string;
-	export let alt: string;
-
-	function skip() {
-		serviceWorker.skip();
-	}
-
-	function accept() {
-		console.log(`accepting update...`);
-		serviceWorker.skipWaiting();
-	}
+	import {fly} from 'svelte/transition';
+	import {notifications} from './';
 </script>
 
 <!-- Global notification live region, render this permanently at the end of the document -->
 <div aria-live="assertive" class="notification-container">
-	<div class="notification-container-inner">
-		{#if $serviceWorker && !$serviceWorker.notSupported && !$serviceWorker.registering && $serviceWorker.updateAvailable && $serviceWorker.registration}
-			<!--
-		Notification panel, dynamically insert this into the live region when it needs to be displayed
-  
-		Entering: "transform ease-out duration-300 transition"
-		  From: "translate-y-2 opacity-0 sm:translate-y-0 sm:translate-x-2"
-		  To: "translate-y-0 opacity-100 sm:translate-x-0"
-		Leaving: "transition ease-in duration-100"
-		  From: "opacity-100"
-		  To: "opacity-0"
-	  -->
-			<div class="notification-panel" transition:fly={{ delay: 250, duration: 300, x: +100 }}>
+	<div class="notification-wrapper">
+		{#each $notifications as notification}
+			<div
+				class="notification-panel"
+				transition:fly={{delay: 250, duration: 300, x: +100}}
+			>
 				<div class="notification-content">
 					<div class="notification-header">
-						<div class="notification-icon-container">
-							{#if src}
-								<img {src} {alt} />
+						<div class="icon-container">
+							{#if notification.data.options?.icon}
+								<img src={notification.data.options.icon} alt="icon" />
 							{:else}
 								<svg
 									class="notification-icon"
@@ -54,16 +34,30 @@
 								</svg>
 							{/if}
 						</div>
-						<div class="notification-text-container">
-							<p class="notification-title">A new version is available.</p>
-							<p class="notification-description">Reload to get the update.</p>
-							<div class="notification-buttons">
-								<button type="button" class="reload-button" onclick={accept}>Reload</button>
-								<button type="button" class="dismiss-button" onclick={skip}>Dismiss</button>
+						<div class="notification-text">
+							<p class="notification-title">{notification.data.title}</p>
+							<p class="notification-body">{notification.data.options.body}.</p>
+							<div class="button-container">
+								<button
+									type="button"
+									class="notification-button"
+									onclick={() => notifications.onClick(notification.id)}
+									>ok</button
+								>
+								<button
+									type="button"
+									class="notification-button"
+									onclick={() => notifications.remove(notification.id)}
+									>dismiss</button
+								>
 							</div>
 						</div>
 						<div class="close-button-container">
-							<button type="button" class="close-button" onclick={skip}>
+							<button
+								type="button"
+								class="close-button"
+								onclick={() => notifications.remove(notification.id)}
+							>
 								<span class="sr-only">Close</span>
 								<svg
 									class="close-icon"
@@ -81,28 +75,25 @@
 					</div>
 				</div>
 			</div>
-		{/if}
+		{/each}
 	</div>
 </div>
 
 <style>
 	.notification-container {
 		position: fixed;
-		top: 0;
-		left: 0;
-		right: 0;
-		bottom: 0;
-		pointer-events: none;
+		inset: 0;
 		display: flex;
 		align-items: flex-end;
 		padding: 1.5rem;
+		pointer-events: none;
 	}
 
-	.notification-container-inner {
-		width: 100%;
+	.notification-wrapper {
 		display: flex;
 		flex-direction: column;
 		align-items: center;
+		width: 100%;
 		gap: 1rem;
 	}
 
@@ -113,10 +104,10 @@
 		overflow: hidden;
 		border-radius: 0.5rem;
 		background-color: white;
+		border: 1px solid rgb(0 0 0 / 0.05);
 		box-shadow:
-			0 10px 15px -3px rgba(0, 0, 0, 0.1),
-			0 4px 6px -2px rgba(0, 0, 0, 0.05);
-		border: 1px solid rgba(0, 0, 0, 0.05);
+			0 10px 15px -3px rgb(0 0 0 / 0.1),
+			0 4px 6px -4px rgb(0 0 0 / 0.1);
 	}
 
 	.notification-content {
@@ -128,7 +119,7 @@
 		align-items: flex-start;
 	}
 
-	.notification-icon-container {
+	.icon-container {
 		flex-shrink: 0;
 	}
 
@@ -138,9 +129,10 @@
 		color: rgb(156 163 175);
 	}
 
-	.notification-text-container {
+	.notification-text {
 		margin-left: 0.75rem;
-		flex: 1 1 0%;
+		width: 0;
+		flex: 1;
 		padding-top: 0.125rem;
 	}
 
@@ -150,62 +142,36 @@
 		color: rgb(17 24 39);
 	}
 
-	.notification-description {
+	.notification-body {
 		margin-top: 0.25rem;
 		font-size: 0.875rem;
 		color: rgb(107 114 128);
 	}
 
-	.notification-buttons {
+	.button-container {
 		margin-top: 0.75rem;
 		display: flex;
 		gap: 1.75rem;
 	}
 
-	.reload-button {
-		border-radius: 0.375rem;
-		background-color: white;
-		font-size: 0.875rem;
-		font-weight: 500;
-		color: rgb(79 70 229);
-		background: transparent;
-		border: none;
-		cursor: pointer;
-	}
-
-	.reload-button:hover {
-		color: rgb(67 56 202);
-	}
-
-	.reload-button:focus {
-		outline: none;
-	}
-
-	.reload-button:focus-visible {
-		box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.5);
-	}
-
-	.dismiss-button {
+	.notification-button {
 		border-radius: 0.375rem;
 		background-color: white;
 		font-size: 0.875rem;
 		font-weight: 500;
 		color: rgb(55 65 81);
-		background: transparent;
 		border: none;
 		cursor: pointer;
+		padding: 0.5rem 1rem;
 	}
 
-	.dismiss-button:hover {
-		color: rgb(75 85 99);
+	.notification-button:hover {
+		color: rgb(107 114 128);
 	}
 
-	.dismiss-button:focus {
+	.notification-button:focus {
 		outline: none;
-	}
-
-	.dismiss-button:focus-visible {
-		box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.5);
+		box-shadow: 0 0 0 2px rgb(99 102 241);
 	}
 
 	.close-button-container {
@@ -215,13 +181,12 @@
 	}
 
 	.close-button {
-		display: inline-flex;
 		border-radius: 0.375rem;
 		background-color: white;
 		color: rgb(156 163 175);
-		background: transparent;
 		border: none;
 		cursor: pointer;
+		padding: 0.25rem;
 	}
 
 	.close-button:hover {
@@ -230,10 +195,7 @@
 
 	.close-button:focus {
 		outline: none;
-	}
-
-	.close-button:focus-visible {
-		box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.5);
+		box-shadow: 0 0 0 2px rgb(99 102 241);
 	}
 
 	.close-icon {
@@ -259,7 +221,7 @@
 			padding: 1.5rem;
 		}
 
-		.notification-container-inner {
+		.notification-wrapper {
 			align-items: flex-end;
 		}
 	}
